@@ -132,7 +132,36 @@ if ($removedLinesCandidates.Count -gt 0) {
         # Determine Command Type and Priority
         # ... (Priority logic remains the same) ...
         if ($currentTrimmedLine.StartsWith("access-list ")) { $priority = 1 }
-        elseif ($indent.Length -gt 0 -and ($currentTrimmedLine.StartsWith("network-object ") -or $currentTrimmedLine.StartsWith("service-object ") -or $currentTrimmedLine.StartsWith("group-object ") )) { for ($j = $i - 1; $j -ge 0; $j--) { $potentialParentOriginal = $oldLinesOriginal[$j]; $potentialParentTrimmed = $potentialParentOriginal.Trim(); if (-not $potentialParentOriginal.StartsWith(" ") -and $potentialParentTrimmed.StartsWith("object-group ")) { $parentContext = $potentialParentTrimmed; break }; elseif (-not $potentialParentOriginal.StartsWith(" ")) { break } }; if ($parentContext) { $priority = 2 } else { $priority = 5 } }
+        elseif ($indent.Length -gt 0 -and ($currentTrimmedLine.StartsWith("network-object ") -or $currentTrimmedLine.StartsWith("service-object ") -or $currentTrimmedLine.StartsWith("group-object ") )) {
+             # Find parent context (object-group ...)
+             for ($j = $i - 1; $j -ge 0; $j--) {
+                $potentialParentOriginal = $oldLinesOriginal[$j]
+                $potentialParentTrimmed = $potentialParentOriginal.Trim()
+
+                # --- ここを修正 ---
+                # Check if the potential parent is the correct type (object-group) and not indented
+                if (-not $potentialParentOriginal.StartsWith(" ") -and $potentialParentTrimmed.StartsWith("object-group ")) {
+                    $parentContext = $potentialParentTrimmed # Store the parent context
+                    break # Exit the inner 'for' loop as we found the parent
+                }
+                # Check if we hit another non-indented line before finding the parent object-group
+                elseif (-not $potentialParentOriginal.StartsWith(" ")) {
+                    # If we hit a different top-level command, the parent isn't directly above this member
+                    break # Exit the inner 'for' loop, no need to search further up
+                }
+                # --- 修正ここまで ---
+
+             } # End for loop searching for parent context
+
+             # Assign priority based on context found
+             if ($parentContext) {
+                 $priority = 2
+             } else {
+                 # Could not find parent context, treat as 'Other' or log warning
+                 Write-Warning "Could not determine parent 'object-group' context for removed member: $currentTrimmedLine"
+                 $priority = 5
+             }
+        }
         elseif ($currentTrimmedLine.StartsWith("object-group ")) { $priority = 3 }
         elseif ($currentTrimmedLine.StartsWith("object ")) { $priority = 4 }
         elseif ($indent.Length -gt 0 -and ($currentTrimmedLine.StartsWith("host ") -or $currentTrimmedLine.StartsWith("subnet ") -or $currentTrimmedLine.StartsWith("service "))) {
